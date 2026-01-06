@@ -1,0 +1,74 @@
+[
+    {
+        "role": "user",
+        "content": "Hello! Please move `final_report.pdf` into a new `temp` folder within `document`."
+    },
+    {
+        "role": "assistant",
+        "content": "Sure — creating folder and moving the file now.",
+        "tool_calls": [
+            {"id": "call_1", "type": "function",
+                "function": {"name": "cd", "arguments": "{\"folder\": \"document\"}"}},
+            {"id": "call_2", "type": "function",
+                "function": {"name": "mkdir", "arguments": "{\"dir_name\": \"temp\"}"}},
+            {"id": "call_3", "type": "function",
+                "function": {"name": "mv", "arguments": "{\"source\": \"final_report.pdf\", \"destination\": \"temp\"}"}}
+        ]
+    },
+    {"role": "tool", "tool_call_id": "call_1", "name": "cd",
+        "content": "{\"status\": \"success\", \"cwd\": \"/workspace/document\"}"},
+    {"role": "tool", "tool_call_id": "call_2", "name": "mkdir",
+        "content": "{\"status\": \"success\", \"message\": \"Directory temp created.\"}"},
+    {"role": "tool", "tool_call_id": "call_3", "name": "mv",
+        "content": "{\"status\": \"success\", \"message\": \"Moved final_report.pdf to temp.\"}"},
+
+    {
+        "role": "user",
+        "content": "Great. Now grep the file for 'budget analysis'."
+    },
+    {
+        "role": "assistant",
+        "content": "Entering temp and running grep...",
+        "tool_calls": [
+            {"id": "call_4", "type": "function",
+                "function": {"name": "cd", "arguments": "{\"folder\": \"temp\"}"}},
+            {"id": "call_5", "type": "function",
+                "function": {"name": "grep", "arguments": "{\"file_name\": \"final_report.pdf\", \"pattern\": \"budget analysis\"}"}}
+        ]
+    },
+    {"role": "tool", "tool_call_id": "call_4", "name": "cd",
+        "content": "{\"status\": \"success\", \"cwd\": \"/workspace/document/temp\"}"},
+    {"role": "tool", "tool_call_id": "call_5", "name": "grep",
+        "content": "{\"status\": \"success\", \"matches\": [\"...budget analysis...\"]}"},
+
+    {
+        "role": "user",
+        "content": "Sort that file by lines, then compare with previous_report.pdf placed in temp too."
+    },
+    {
+        "role": "assistant",
+        "content": "Sorting, moving, and diffing...",
+        "tool_calls": [
+            {"id": "call_6", "type": "function",
+                "function": {"name": "sort", "arguments": "{\"file_name\": \"final_report.pdf\"}"}},
+            {"id": "call_7", "type": "function",
+                "function": {"name": "cd", "arguments": "{\"folder\": \"..\"}"}},
+            {"id": "call_8", "type": "function",
+                "function": {"name": "mv", "arguments": "{\"source\": \"previous_report.pdf\", \"destination\": \"temp\"}"}},
+            {"id": "call_9", "type": "function",
+                "function": {"name": "cd", "arguments": "{\"folder\": \"temp\"}"}},
+            {"id": "call_10", "type": "function",
+                "function": {"name": "diff", "arguments": "{\"file_name1\": \"final_report.pdf\", \"file_name2\": \"previous_report.pdf\"}"}}
+        ]
+    },
+    {"role": "tool", "tool_call_id": "call_6", "name": "sort",
+        "content": "{\"status\": \"success\"}"},
+    {"role": "tool", "tool_call_id": "call_7", "name": "cd",
+        "content": "{\"status\": \"success\", \"cwd\": \"/workspace/document\"}"},
+    {"role": "tool", "tool_call_id": "call_8", "name": "mv",
+        "content": "{\"status\": \"success\", \"message\": \"Moved previous_report.pdf to temp.\"}"},
+    {"role": "tool", "tool_call_id": "call_9", "name": "cd",
+        "content": "{\"status\": \"success\", \"cwd\": \"/workspace/document/temp\"}"},
+    {"role": "tool", "tool_call_id": "call_10", "name": "diff",
+        "content": "{\"status\": \"success\", \"diff\": \"...\"}"}
+]

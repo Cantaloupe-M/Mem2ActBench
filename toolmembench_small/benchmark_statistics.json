@@ -1,0 +1,10 @@
+{
+  "total_sessions": 429,
+  "total_qa": 400,
+  "avg_turns_per_session": 12.678321678321678,
+  "sessions_with_tools": 421,
+  "total_tokens": 1468262,
+  "avg_tokens_per_session": 3422.5221445221446,
+  "max_tokens_per_session": 13860,
+  "min_tokens_per_session": 1252
+}
