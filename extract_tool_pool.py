@@ -1,7 +1,7 @@
 import json
 
-input_file = '/home/amax/syt/toolmem/toolace_formatted_conversations.jsonl'
-output_file = '/home/amax/syt/toolmem/tool_api_pool.json'
+input_file = 'toolace_formatted_conversations.jsonl'
+output_file = 'tool_api_pool.json'
 
 tool_pool = set()
 
