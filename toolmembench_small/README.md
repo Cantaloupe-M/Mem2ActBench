@@ -1,7 +1,7 @@
-# ToolMemBench 数据集（小版本）
+# Mem2ACTBench 数据集（小版本）
 
 ## 1. 数据集概览
-**ToolMemBench** 是一个专注于评估大语言模型在**长上下文（Long Context）**中进行**记忆驱动工具调用**能力的基准测试。
+**Mem2ACTBench** 是一个专注于评估大语言模型在**长上下文（Long Context）**中进行**记忆驱动工具调用**能力的基准测试。
 
 **小版本数据集**，用于快速开发和测试。
 
@@ -15,13 +15,13 @@
 
 | 文件名 | 类型 | 用途 |
 | :--- | :--- | :--- |
-| **`toolmem_conversation.jsonl`** | **Session数据** | 包含完整的对话历史（User/Assistant/Tool turns）。这是模型看到的"输入上下文"。 |
+| **`Mem2ACT_conversation.jsonl`** | **Session数据** | 包含完整的对话历史（User/Assistant/Tool turns）。这是模型看到的"输入上下文"。 |
 | **`qa_dataset.jsonl`** | **QA数据** | 包含具体的评测样本（Query + 标准答案）。这是用于评估的"标签数据"。 |
 | `benchmark_statistics.json` | 统计信息 | 数据集的统计分布概览。 |
 
 ## 3. 核心数据字段详解
 
-### (1) Session 数据 (`toolmem_conversation.jsonl`)
+### (1) Session 数据 (`Mem2ACT_conversation.jsonl`)
 *   **`session_id`**: 全局唯一标识。
 *   **`turns`**: 完整的对话轮次列表。
 *   **`original_conversation_ids`**: 组成该长 Session 的原始对话来源（用于追踪话题混合情况）。
@@ -50,9 +50,9 @@
 
 ## 5. 快速使用逻辑
 1.  加载 `qa_dataset.jsonl` 获取评测问题和标准答案。
-2.  根据 `qa_dataset` 中的 `source_conversation_ids`，从 `toolmem_conversation.jsonl` 中检索对应的完整对话历史作为 Context。
+2.  根据 `qa_dataset` 中的 `source_conversation_ids`，从 `Mem2ACT_conversation.jsonl` 中检索对应的完整对话历史作为 Context。
 3.  将 Context + Query 输入模型，对比模型输出与 `tool_call` 标签。
 
 ***
 
-**总结**：ToolMemBench 不仅仅是做工具调用，更是在考察模型**"在长对话中记得住、找得准、推得对"**的能力。通过 L1-L3 的分级，可以精细化诊断模型在记忆检索和逻辑推理上的短板。
+**总结**：Mem2ACTBench 不仅仅是做工具调用，更是在考察模型**"在长对话中记得住、找得准、推得对"**的能力。通过 L1-L3 的分级，可以精细化诊断模型在记忆检索和逻辑推理上的短板。

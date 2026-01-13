@@ -166,7 +166,7 @@ class BenchmarkNormalizer:
         
         benchmark = {
             'metadata': {
-                'dataset_name': 'ToolMem-Benchmark',
+                'dataset_name': 'Mem2ACT-Benchmark',
                 'version': '1.0',
                 'total_sessions': len(sessions),
                 'description': 'Memory-driven tool calling benchmark dataset'
@@ -415,7 +415,7 @@ class BenchmarkNormalizer:
         
         # 1. 保存完整benchmark (JSONL格式,便于大文件处理)
         # 删除thread_id, constituent_threads, qa_items字段
-        output_jsonl = self.output_dir / 'toolmem_conversation.jsonl'
+        output_jsonl = self.output_dir / 'Mem2ACT_conversation.jsonl'
         with open(output_jsonl, 'w', encoding='utf-8') as f:
             for session in benchmark['sessions']:
                 # 创建清理后的session副本
@@ -504,7 +504,7 @@ class BenchmarkNormalizer:
         print(f"✅ 保存小版本QA: {qa_output} ({len(small_qa)} 条)")
         
         # 2. 保存conversations
-        conv_output = small_output_dir / 'toolmem_conversation.jsonl'
+        conv_output = small_output_dir / 'Mem2ACT_conversation.jsonl'
         with open(conv_output, 'w', encoding='utf-8') as f:
             for session in small_sessions:
                 cleaned_session = {
@@ -545,10 +545,10 @@ class BenchmarkNormalizer:
     
     def _generate_readme(self, stats, sessions):
         """生成README文档"""
-        readme_content = f"""# ToolMemBench 数据集核心说明
+        readme_content = f"""# Mem2ACTBench 数据集核心说明
 
 ## 1. 数据集概览
-**ToolMemBench** 是一个专注于评估大语言模型在**长上下文（Long Context）**中进行**记忆驱动工具调用**能力的基准测试。
+**Mem2ACTBench** 是一个专注于评估大语言模型在**长上下文（Long Context）**中进行**记忆驱动工具调用**能力的基准测试。
 
 *   **核心挑战**：工具调用的参数通常不在当前轮次，而是散落在之前的长对话历史中，需要模型具备记忆检索、信息聚合和推理能力。
 *   **构建策略**：通过拼接多个原始对话片段形成长 Session（包含混合话题干扰），模拟真实的复杂对话场景。
@@ -600,7 +600,7 @@ class BenchmarkNormalizer:
 
 ***
 
-**总结**：ToolMemBench 不仅仅是做工具调用，更是在考察模型**“在长对话中记得住、找得准、推得对”**的能力。通过 L1-L3 的分级，可以精细化诊断模型在记忆检索和逻辑推理上的短板。
+**总结**：Mem2ACTBench 不仅仅是做工具调用，更是在考察模型**“在长对话中记得住、找得准、推得对”**的能力。通过 L1-L3 的分级，可以精细化诊断模型在记忆检索和逻辑推理上的短板。
 """
         
         readme_path = self.output_dir / 'README.md'
@@ -612,10 +612,10 @@ class BenchmarkNormalizer:
         """生成特定版本的README文档"""
         version_note = "**小版本数据集**，用于快速开发和测试。" if is_small else "完整版数据集。"
         
-        readme_content = f"""# ToolMemBench 数据集{'（小版本）' if is_small else ''}
+        readme_content = f"""# Mem2ACTBench 数据集{'（小版本）' if is_small else ''}
 
 ## 1. 数据集概览
-**ToolMemBench** 是一个专注于评估大语言模型在**长上下文（Long Context）**中进行**记忆驱动工具调用**能力的基准测试。
+**Mem2ACTBench** 是一个专注于评估大语言模型在**长上下文（Long Context）**中进行**记忆驱动工具调用**能力的基准测试。
 
 {version_note}
 
@@ -629,13 +629,13 @@ class BenchmarkNormalizer:
 
 | 文件名 | 类型 | 用途 |
 | :--- | :--- | :--- |
-| **`toolmem_conversation.jsonl`** | **Session数据** | 包含完整的对话历史（User/Assistant/Tool turns）。这是模型看到的"输入上下文"。 |
+| **`Mem2ACT_conversation.jsonl`** | **Session数据** | 包含完整的对话历史（User/Assistant/Tool turns）。这是模型看到的"输入上下文"。 |
 | **`qa_dataset.jsonl`** | **QA数据** | 包含具体的评测样本（Query + 标准答案）。这是用于评估的"标签数据"。 |
 | `benchmark_statistics.json` | 统计信息 | 数据集的统计分布概览。 |
 
 ## 3. 核心数据字段详解
 
-### (1) Session 数据 (`toolmem_conversation.jsonl`)
+### (1) Session 数据 (`Mem2ACT_conversation.jsonl`)
 *   **`session_id`**: 全局唯一标识。
 *   **`turns`**: 完整的对话轮次列表。
 *   **`original_conversation_ids`**: 组成该长 Session 的原始对话来源（用于追踪话题混合情况）。
@@ -664,12 +664,12 @@ class BenchmarkNormalizer:
 
 ## 5. 快速使用逻辑
 1.  加载 `qa_dataset.jsonl` 获取评测问题和标准答案。
-2.  根据 `qa_dataset` 中的 `source_conversation_ids`，从 `toolmem_conversation.jsonl` 中检索对应的完整对话历史作为 Context。
+2.  根据 `qa_dataset` 中的 `source_conversation_ids`，从 `Mem2ACT_conversation.jsonl` 中检索对应的完整对话历史作为 Context。
 3.  将 Context + Query 输入模型，对比模型输出与 `tool_call` 标签。
 
 ***
 
-**总结**：ToolMemBench 不仅仅是做工具调用，更是在考察模型**"在长对话中记得住、找得准、推得对"**的能力。通过 L1-L3 的分级，可以精细化诊断模型在记忆检索和逻辑推理上的短板。
+**总结**：Mem2ACTBench 不仅仅是做工具调用，更是在考察模型**"在长对话中记得住、找得准、推得对"**的能力。通过 L1-L3 的分级，可以精细化诊断模型在记忆检索和逻辑推理上的短板。
 """
         
         readme_path = output_dir / 'README.md'
@@ -758,7 +758,7 @@ def main():
     # 配置路径
     conversation_csv = "processed_data/conversation_sequence.csv"
     qa_jsonl = "processed_data/memory_driven_qa_Kimi-K2-Instruct-0905_v2.jsonl"
-    output_dir = "toolmembench"
+    output_dir = "Mem2ACTBench"
     
     # 执行规范化
     normalizer = BenchmarkNormalizer(conversation_csv, qa_jsonl, output_dir)
