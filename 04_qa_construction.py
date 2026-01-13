@@ -686,7 +686,11 @@ class ToolPoolManager:
             similarities = util.cos_sim(memory_embedding, self.tool_embeddings)[0]
             top_indices = similarities.topk(min(top_k, len(self.tools))).indices.tolist()
             candidates = [self.tools[idx] for idx in top_indices]
-        
+            
+            # 可选：叠加主题过滤（进一步提升精准度）
+            # topic_filtered = self._topic_filter(memory_text, candidates)
+            # return topic_filtered if topic_filtered else candidates
+            
             return candidates
             
         except Exception as e:
@@ -961,6 +965,12 @@ class ToolCallConstructor:
         example_output = {
             "name": tool.get('name'),
             "arguments": example_arguments,
+            "grounding_info": {
+                "param_name": {
+                    "source_text": "exact text from memory or reasoning basis or default value definition",
+                    "type": "explicit/inferred/default"
+                }
+            },
             "relevant_source_ids": ["source_id_1", "source_id_2","..."]
         }
         
@@ -976,15 +986,27 @@ class ToolCallConstructor:
             {json.dumps(memory_chain, indent=2, ensure_ascii=False)}
 
             CRITICAL REQUIREMENTS:
-            1. At least one parameter value MUST come from the memory above.
+            1. At least one parameter values MUST come from the memory above (Explicit or Inferred).
             2. Match parameter types exactly (string/integer/number/boolean/array/object).
             3. For nested structures (arrays of objects), follow the schema's items/properties definitions.
             4. All required parameters must be filled.
             5. PREFER ORIGINAL TEXT: If a parameter can be found in memory, USE THE EXACT ORIGINAL TEXT from the memory.
+            
+            6. PARAMETER SOURCES:
+               - Memory (Explicit): Value appears verbatim in memory (e.g., "ID is 123" -> id="123").
+               - Memory (Inferred): Value is inferred from context (e.g., "visiting Eiffel Tower" -> city="Paris").
+               - Schema (Default): Value comes from the tool schema's default value if not found in memory.
+               - Multi-hop: Parameters come from multiple different facts.
 
-            6. SOURCE IDENTIFICATION:
+            7. GROUNDING INFO:
+               - For each extracted parameter, specify:
+                 * "source_text": The text in memory used for extraction (or "default value").
+                 * "type": "explicit", "inferred", or "default".
+
+            8. SOURCE IDENTIFICATION:
                - Identify which specific memory items (by their 'source_id') were necessary to derive the parameters.
-               - List ALL source_ids that contributed to the parameters.
+               - List ALL source_ids that contributed to the parameters (including inferred ones).
+               - If a parameter comes from a default value, do not include a source_id for it unless it was verified against memory.
 
             Output JSON (follow this structure):
             {json.dumps(example_output, indent=2, ensure_ascii=False)}
@@ -1000,6 +1022,7 @@ class ToolCallConstructor:
             result = safe_json_loads(response.choices[0].message.content, {})
             
             arguments = result.get("arguments", {})
+            grounding_info = result.get("grounding_info", {})
             relevant_source_ids = result.get("relevant_source_ids", [])
             
             # 过滤并验证 source_ids
@@ -1009,6 +1032,8 @@ class ToolCallConstructor:
             
             # 构建用于验证的 memory 子集
             validation_memory_chain = [item for item in memory_chain if item.get("source_id") in verified_source_ids]
+            # 生成 validation text (用于 inference 验证)
+            validation_memory_text = json.dumps(validation_memory_chain, ensure_ascii=False, indent=2)
             
             if not arguments:
                 LOGGER.debug("参数为空")
@@ -1020,25 +1045,102 @@ class ToolCallConstructor:
                 LOGGER.debug(f"Schema校验失败: {schema_error}")
                 return None
             
-            # 验证 2: 记忆锚定验证 (使用 MemoryGroundingValidator)
-            is_grounded, grounded_params, param_to_memory, param_modes = self.grounding_validator.validate_grounding(
-                arguments, validation_memory_chain, [], 
-                llm_grounded_params=list(arguments.keys()),
-                mode=self.grounding_mode
-            )
+            # 分离 explicit, inferred 和 default 参数
+            explicit_params = {}
+            inferred_params = {}
+            default_params = {}
+            
+            for param, info in grounding_info.items():
+                if param not in arguments: continue
+                
+                p_type = info.get("type", "explicit")
+                if p_type == "inferred":
+                    inferred_params[param] = (arguments[param], info.get("source_text", ""))
+                elif p_type == "default":
+                    default_params[param] = arguments[param]
+                else:
+                    explicit_params[param] = arguments[param]
 
-            # 检查是否满足必填参数要求：至少有一个参数必须锚定到记忆
+            grounded_params = []
+            param_to_memory = {}
+            param_modes = {}
+
+            # 验证 2a: Explicit 参数 (使用 MemoryGroundingValidator)
+            if explicit_params:
+                is_grounded, g_params, p_map, p_modes = self.grounding_validator.validate_grounding(
+                    explicit_params, validation_memory_chain, [], 
+                    llm_grounded_params=list(explicit_params.keys()),
+                    mode=self.grounding_mode
+                )
+                if is_grounded or g_params:
+                    grounded_params.extend(g_params)
+                    param_to_memory.update(p_map)
+                    param_modes.update(p_modes)
+            
+            # 验证 2b: Inferred 参数 (使用 LLM 验证)
+            if inferred_params:
+                for param, (val, source) in inferred_params.items():
+                    if self._verify_inference(param, val, source, validation_memory_text):
+                        grounded_params.append(param)
+                        param_modes[param] = "inferred"
+                        # 尝试找到对应的 memory id
+                        for item in validation_memory_chain:
+                            if item.get("fact") and source in item.get("fact"):
+                                param_to_memory[param] = item.get("id")
+                                break
+                        if param not in param_to_memory:
+                             param_to_memory[param] = "inferred_source"
+
+            # 验证 2c: Default 参数 (直接接受，不计入 grounded_params，但标记为 default)
+            if default_params:
+                for param in default_params:
+                    param_modes[param] = "default"
+                    param_to_memory[param] = "schema_default"
+
+            # 检查是否满足必填参数要求
+            # 至少有一个参数必须来自 Memory (Explicit 或 Inferred)
             if not grounded_params:
-                LOGGER.debug("没有参数锚定到记忆")
+                LOGGER.debug("没有参数锚定到记忆 (All defaults or failed grounding)")
                 return None
             
-            LOGGER.debug(f"工具调用构造成功: {result.get('name')}, 锚定参数: {grounded_params}")
+            LOGGER.debug(f"工具调用构造成功: {result.get('name')}, 锚定参数: {grounded_params}, 模式: {param_modes}")
             
             return result
             
         except Exception as e:
             LOGGER.error(f"工具调用构造失败: {e}")
             return None
+
+    def _verify_inference(self, param: str, value: Any, source_text: str, full_memory: str) -> bool:
+        """验证推断参数的合理性"""
+        prompt = f"""Verify if the parameter inference is logically sound based on the user memory.
+
+        User Memory:
+        {full_memory}
+
+        Inference Claim:
+        - Parameter: {param}
+        - Inferred Value: {value}
+        - Based on text: "{source_text}"
+
+        Is this inference correct and logical? (e.g., "Eiffel Tower" -> "Paris" is YES. "Apple" -> "Banana" is NO).
+        
+        Output JSON:
+        {{
+            "is_valid": true/false,
+            "reason": "explanation"
+        }}
+        """
+        try:
+             response = self.llm_client.chat_completion(
+                model=self.model, temperature=0,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"}
+            )
+             res = safe_json_loads(response.choices[0].message.content, {})
+             return res.get("is_valid", False)
+        except:
+            return False
 
 
 class ReverseQueryGenerator:
@@ -1121,14 +1223,28 @@ class ReverseQueryGenerator:
             return None
 
 def check_argument_leakage(query: str, tool_call: Dict) -> bool:
-    """参数泄露检查
+    """参数泄露检查 - 智能版
     
-    检查所有参数值是否泄露到 Query 中。
+    仅检查那些「标记为来自记忆」的参数是否泄露。
+    默认参数或非记忆参数允许出现在 Query 中。
     """
     query_lower = query.lower()
     args = tool_call.get("arguments", {})
+    # 获取参数的锚定来源信息
+    grounding_info = tool_call.get("grounding_info", {}) 
     
     for param_name, param_value in args.items():
+        # === 核心优化逻辑 ===
+        # 1. 获取该参数的来源类型
+        p_info = grounding_info.get(param_name, {})
+        source_type = p_info.get("type", "unknown")
+
+        # 2. 白名单过滤：只有 "explicit" 或 "inferred" 的参数才严禁泄露
+        # 如果参数是 "default"，或者没有来源标记，我们假设它不需要被隐藏
+        if source_type not in ["explicit", "inferred"]:
+            continue
+
+        # === 以下是针对记忆参数的严格检查 ===
         value_str = str(param_value).strip()
         
         # 跳过过短的值（避免误杀如 "1", "US", "on"）
@@ -1140,7 +1256,7 @@ def check_argument_leakage(query: str, tool_call: Dict) -> bool:
             num_val = float(value_str)
             # 检查数字是否直接出现在query中 (例如参数是 123456)
             if str(int(num_val)) in query or value_str in query:
-                LOGGER.debug(f"检测到参数(数值)泄露: {param_name}={value_str}")
+                LOGGER.debug(f"检测到记忆参数(数值)泄露: {param_name}={value_str} (Source: {source_type})")
                 return True
         except ValueError:
             pass
@@ -1152,7 +1268,7 @@ def check_argument_leakage(query: str, tool_call: Dict) -> bool:
         # 使用边界符 \b 避免匹配到单词的一部分 (如 value="cat" 匹配到 "category")
         pattern = r'\b' + re.escape(value_lower) + r'\b'
         if re.search(pattern, query_lower):
-            LOGGER.debug(f"检测到参数(整词)泄露: {param_name}={value_str}")
+            LOGGER.debug(f"检测到记忆参数(整词)泄露: {param_name}={value_str} (Source: {source_type})")
             return True
 
         # B. 关键词拆分检查 (针对长复合词)
@@ -1167,13 +1283,13 @@ def check_argument_leakage(query: str, tool_call: Dict) -> bool:
             for kw in keywords:
                 pattern = r'\b' + re.escape(kw) + r'\b'
                 if re.search(pattern, query_lower):
-                    LOGGER.debug(f"检测到参数(关键词 '{kw}')泄露: {param_name}={value_str}")
+                    LOGGER.debug(f"检测到记忆参数(关键词 '{kw}')泄露: {param_name}={value_str} (Source: {source_type})")
                     return True
         
         # C. 特殊格式检查 (Email, URL, ID)
         if any(char in value_str for char in ['@', 'http', '://']):
              if value_str in query or value_lower in query_lower:
-                LOGGER.debug(f"检测到参数(特殊格式)泄露: {param_name}={value_str}")
+                LOGGER.debug(f"检测到记忆参数(特殊格式)泄露: {param_name}={value_str}")
                 return True
     
     return False
