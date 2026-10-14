@@ -13,13 +13,13 @@
 
 | 文件名 | 类型 | 用途 |
 | :--- | :--- | :--- |
-| **`benchmark_normalized.jsonl`** | **Session数据** | 包含完整的对话历史（User/Assistant/Tool turns）。这是模型看到的“输入上下文”。 |
+| **`Mem2ACT_conversation.jsonl`** | **Session数据** | 包含完整的对话历史（User/Assistant/Tool turns）。这是模型看到的“输入上下文”。 |
 | **`qa_dataset.jsonl`** | **QA数据** | 包含具体的评测样本（Query + 标准答案）。这是用于评估的“标签数据”。 |
 | `*_statistics.json` | 统计信息 | 数据集的统计分布概览。 |
 
 ## 3. 核心数据字段详解
 
-### (1) Session 数据 (`benchmark_normalized.jsonl`)
+### (1) Session 数据 (`Mem2ACT_conversation.jsonl`)
 *   **`session_id`**: 全局唯一标识。
 *   **`turns`**: 完整的对话轮次列表。
 *   **`original_conversation_ids`**: 组成该长 Session 的原始对话来源（用于追踪话题混合情况）。
@@ -33,13 +33,14 @@
 *   **`complexity_metadata`**: **[重点]** 定义了该样本的难度分级。
 
 ## 4. 评估维度与难度分级 (Complexity Levels)
-数据集根据**参数获取的难易程度**，定义了三个核心认知层级：
+数据集根据**参数获取的难易程度**，定义了四个核心认知层级：
 
 | 层级 | 名称 | 描述 |
 | :--- | :--- | :--- |
-| **L1** | **Atomic-Explicit** (显式提取) | 所有参数值都在对话历史中**明确出现**，无需推理，仅需检索。 |
-| **L2** | **Atomic-Inferred** (单步推理) | 至少一个参数需要结合上下文**推断**（例如：从“明天”推断具体日期，或从用户偏好推断参数）。 |
-| **L3** | **Composite/Multi-hop** (多跳推理) | 需要**聚合**多个记忆片段或进行**多步逻辑**推理才能得出参数（例如：对比多个产品后选择）。 |
+| **L1** | **Direct-Copy** | 单一来源，参数直接提取。 |
+| **L2** | **Semantic-Understanding** | 单一来源，需要推理或转换。 |
+| **L3** | **Cross-turn-Aggregation** | 多个来源，聚合信息且无时序冲突。 |
+| **L4** | **Conflict-Resolution / Multi-hop-Reasoning** | 需要时序冲突消解，或跨来源推理。 |
 
 此外，还细分了参数类型：
 *   **`explicit`**: 显式提及。
@@ -48,9 +49,9 @@
 
 ## 5. 快速使用逻辑
 1.  加载 `qa_dataset.jsonl` 获取评测问题和标准答案。
-2.  根据 `qa_dataset` 中的 `source_conversation_ids` 或 `session_id`，从 `benchmark_normalized.jsonl` 中检索对应的完整对话历史作为 Context。
+2.  根据 `qa_dataset` 中的 `source_conversation_ids`，从 `Mem2ACT_conversation.jsonl` 中检索对应的完整对话历史作为 Context。
 3.  将 Context + Query 输入模型，对比模型输出与 `tool_call` 标签。
 
 ***
 
-**总结**：Mem2ACTBench 不仅仅是做工具调用，更是在考察模型**“在长对话中记得住、找得准、推得对”**的能力。通过 L1-L3 的分级，可以精细化诊断模型在记忆检索和逻辑推理上的短板。
+**总结**：Mem2ACTBench 不仅仅是做工具调用，更是在考察模型**“在长对话中记得住、找得准、推得对”**的能力。通过 L1-L4 的分级，可以精细化诊断模型在记忆检索和逻辑推理上的短板。

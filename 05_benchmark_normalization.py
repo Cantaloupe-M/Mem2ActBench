@@ -3,6 +3,7 @@ Benchmark数据集规范化脚本
 将conversation_sequence.csv和memory_driven_qa.jsonl规范化为标准格式
 """
 
+import argparse
 import json
 import csv
 import pandas as pd
@@ -20,7 +21,7 @@ class BenchmarkNormalizer:
         self.conversation_csv = Path(conversation_csv)
         self.qa_jsonl = Path(qa_jsonl)
         self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(exist_ok=True)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
         
         # 初始化tokenizer (使用cl100k_base，适用于GPT-4等模型)
         try:
@@ -560,13 +561,13 @@ class BenchmarkNormalizer:
 
 | 文件名 | 类型 | 用途 |
 | :--- | :--- | :--- |
-| **`benchmark_normalized.jsonl`** | **Session数据** | 包含完整的对话历史（User/Assistant/Tool turns）。这是模型看到的“输入上下文”。 |
+| **`Mem2ACT_conversation.jsonl`** | **Session数据** | 包含完整的对话历史（User/Assistant/Tool turns）。这是模型看到的“输入上下文”。 |
 | **`qa_dataset.jsonl`** | **QA数据** | 包含具体的评测样本（Query + 标准答案）。这是用于评估的“标签数据”。 |
-| `*_statistics.json` | 统计信息 | 数据集的统计分布概览。 |
+| `benchmark_statistics.json` | 统计信息 | 数据集的统计分布概览。 |
 
 ## 3. 核心数据字段详解
 
-### (1) Session 数据 (`benchmark_normalized.jsonl`)
+### (1) Session 数据 (`Mem2ACT_conversation.jsonl`)
 *   **`session_id`**: 全局唯一标识。
 *   **`turns`**: 完整的对话轮次列表。
 *   **`original_conversation_ids`**: 组成该长 Session 的原始对话来源（用于追踪话题混合情况）。
@@ -580,13 +581,14 @@ class BenchmarkNormalizer:
 *   **`complexity_metadata`**: **[重点]** 定义了该样本的难度分级。
 
 ## 4. 评估维度与难度分级 (Complexity Levels)
-数据集根据**参数获取的难易程度**，定义了三个核心认知层级：
+数据集根据**参数获取的难易程度**，定义了四个核心认知层级：
 
 | 层级 | 名称 | 描述 |
 | :--- | :--- | :--- |
-| **L1** | **Atomic-Explicit** (显式提取) | 所有参数值都在对话历史中**明确出现**，无需推理，仅需检索。 |
-| **L2** | **Atomic-Inferred** (单步推理) | 至少一个参数需要结合上下文**推断**（例如：从“明天”推断具体日期，或从用户偏好推断参数）。 |
-| **L3** | **Composite/Multi-hop** (多跳推理) | 需要**聚合**多个记忆片段或进行**多步逻辑**推理才能得出参数（例如：对比多个产品后选择）。 |
+| **L1** | **Direct-Copy** | 单一来源，参数直接提取。 |
+| **L2** | **Semantic-Understanding** | 单一来源，需要推理或转换。 |
+| **L3** | **Cross-turn-Aggregation** | 多个来源，聚合信息且无时序冲突。 |
+| **L4** | **Conflict-Resolution / Multi-hop-Reasoning** | 需要时序冲突消解，或跨来源推理。 |
 
 此外，还细分了参数类型：
 *   **`explicit`**: 显式提及。
@@ -595,12 +597,12 @@ class BenchmarkNormalizer:
 
 ## 5. 快速使用逻辑
 1.  加载 `qa_dataset.jsonl` 获取评测问题和标准答案。
-2.  根据 `qa_dataset` 中的 `source_conversation_ids` 或 `session_id`，从 `benchmark_normalized.jsonl` 中检索对应的完整对话历史作为 Context。
+2.  根据 `qa_dataset` 中的 `source_conversation_ids`，从 `Mem2ACT_conversation.jsonl` 中检索对应的完整对话历史作为 Context。
 3.  将 Context + Query 输入模型，对比模型输出与 `tool_call` 标签。
 
 ***
 
-**总结**：Mem2ACTBench 不仅仅是做工具调用，更是在考察模型**“在长对话中记得住、找得准、推得对”**的能力。通过 L1-L3 的分级，可以精细化诊断模型在记忆检索和逻辑推理上的短板。
+**总结**：Mem2ACTBench 不仅仅是做工具调用，更是在考察模型**“在长对话中记得住、找得准、推得对”**的能力。通过 L1-L4 的分级，可以精细化诊断模型在记忆检索和逻辑推理上的短板。
 """
         
         readme_path = self.output_dir / 'README.md'
@@ -649,13 +651,14 @@ class BenchmarkNormalizer:
 *   **`complexity_metadata`**: **[重点]** 定义了该样本的难度分级。
 
 ## 4. 评估维度与难度分级 (Complexity Levels)
-数据集根据**参数获取的难易程度**，定义了三个核心认知层级：
+数据集根据**参数获取的难易程度**，定义了四个核心认知层级：
 
 | 层级 | 名称 | 描述 |
 | :--- | :--- | :--- |
-| **L1** | **Atomic-Explicit** (显式提取) | 所有参数值都在对话历史中**明确出现**，无需推理，仅需检索。 |
-| **L2** | **Atomic-Inferred** (单步推理) | 至少一个参数需要结合上下文**推断**（例如：从"明天"推断具体日期，或从用户偏好推断参数）。 |
-| **L3** | **Composite/Multi-hop** (多跳推理) | 需要**聚合**多个记忆片段或进行**多步逻辑**推理才能得出参数（例如：对比多个产品后选择）。 |
+| **L1** | **Direct-Copy** | 单一来源，参数直接提取。 |
+| **L2** | **Semantic-Understanding** | 单一来源，需要推理或转换。 |
+| **L3** | **Cross-turn-Aggregation** | 多个来源，聚合信息且无时序冲突。 |
+| **L4** | **Conflict-Resolution / Multi-hop-Reasoning** | 需要时序冲突消解，或跨来源推理。 |
 
 此外，还细分了参数类型：
 *   **`explicit`**: 显式提及。
@@ -669,7 +672,7 @@ class BenchmarkNormalizer:
 
 ***
 
-**总结**：Mem2ACTBench 不仅仅是做工具调用，更是在考察模型**"在长对话中记得住、找得准、推得对"**的能力。通过 L1-L3 的分级，可以精细化诊断模型在记忆检索和逻辑推理上的短板。
+**总结**：Mem2ACTBench 不仅仅是做工具调用，更是在考察模型**"在长对话中记得住、找得准、推得对"**的能力。通过 L1-L4 的分级，可以精细化诊断模型在记忆检索和逻辑推理上的短板。
 """
         
         readme_path = output_dir / 'README.md'
@@ -755,14 +758,21 @@ class BenchmarkNormalizer:
 
 def main():
     """主函数"""
-    # 配置路径
-    conversation_csv = "processed_data/conversation_sequence.csv"
-    qa_jsonl = "processed_data/memory_driven_qa_Kimi-K2-Instruct-0905_v2.jsonl"
-    output_dir = "Mem2ACTBench"
-    
-    # 执行规范化
-    normalizer = BenchmarkNormalizer(conversation_csv, qa_jsonl, output_dir)
-    normalizer.run(create_small=True, small_qa_count=400)
+    parser = argparse.ArgumentParser(description="规范化 Benchmark 并生成小版本")
+    parser.add_argument("--conversation-csv", type=Path, default=Path("processed_data/conversation_sequence.csv"),
+                        help="排序后的对话 CSV 路径")
+    parser.add_argument("--qa-jsonl", type=Path, default=Path("processed_data/memory_driven_qa_Kimi-K2-Instruct-0905_v2.jsonl"),
+                        help="QA 构造结果 JSONL 路径")
+    parser.add_argument("-o", "--output-dir", type=Path, default=Path("Mem2ACTBench"),
+                        help="完整版输出目录（覆盖写入）；小版本为同级的 <目录名>_small")
+    parser.add_argument("--small-qa-count", type=int, default=400, help="小版本 QA 数量（正整数）")
+    parser.add_argument("--no-small", action="store_true", help="不生成小版本")
+    args = parser.parse_args()
+    if args.small_qa_count <= 0:
+        parser.error("--small-qa-count 必须为正整数")
+
+    normalizer = BenchmarkNormalizer(args.conversation_csv, args.qa_jsonl, args.output_dir)
+    normalizer.run(create_small=not args.no_small, small_qa_count=args.small_qa_count)
 
 
 if __name__ == "__main__":

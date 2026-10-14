@@ -25,8 +25,6 @@ GLINER_AVAILABLE = True
 SEMANTIC_MODEL = None  # 延迟加载
 SEMANTIC_AVAILABLE = True
 
-os.environ["OPENAI_BASE_URL"] = "https://api.siliconflow.cn/v1"
-os.environ["OPENAI_API_KEY"] = "sk-omutivisxktqoglinfimxbckcxacgaqayusvamjquihiujov"
 
 # 固定随机种子以保证可复现性
 RANDOM_SEED = 42
@@ -1699,6 +1697,8 @@ def main():
                        help="路径到记忆演化数据 (CSV格式)")
     parser.add_argument("--tool-pool-path", type=Path, default=Path("tool_api_pool.json"),
                        help="路径到静态工具池 (e.g., ToolACE)")
+    parser.add_argument("-o", "--output", type=Path, default=None,
+                       help="QA 输出 JSONL 路径；默认按模型名生成，已有文件按 source_index 续跑")
     parser.add_argument("--llm-model", type=str, default="moonshotai/Kimi-K2-Instruct-0905",help="生成使用的 LLM 模型")
     parser.add_argument("--max-event-groups", type=int, default=None ,
                        help="最大处理的事件组数 (用于调试)")
@@ -1710,7 +1710,8 @@ def main():
                        help="参数锚定模式: strict (仅精确匹配) 或 hybrid (精确+软匹配)")
     
     args = parser.parse_args()
-    args.output = Path(f"processed_data/memory_driven_qa_{args.llm_model.split('/')[-1]}_v2.jsonl")
+    if args.output is None:
+        args.output = Path(f"processed_data/memory_driven_qa_{args.llm_model.split('/')[-1]}_v2.jsonl")
     
     constructor = MemoryDrivenQAConstructor(
         memory_path=args.memory_path,

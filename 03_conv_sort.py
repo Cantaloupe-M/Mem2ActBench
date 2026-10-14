@@ -1,3 +1,5 @@
+import argparse
+from pathlib import Path
 from collections import defaultdict
 from typing import Any
 import pandas as pd
@@ -88,10 +90,19 @@ def find_interleaved_sequence(sequences):
     else:
         return result, set()
 
-if __name__ == "__main__":
-    final_groups = pd.read_csv("processed_data/conflict_evolutions.csv")
+def main():
+    parser = argparse.ArgumentParser(description="合并记忆演化链并排序对话")
+    parser.add_argument("--evolutions", type=Path, default=Path("processed_data/conflict_evolutions.csv"),
+                        help="记忆演化 CSV 路径")
+    parser.add_argument("--facts", type=Path, default=Path("processed_data/original_records_with_facts.csv"),
+                        help="事实记录 CSV 路径")
+    parser.add_argument("-o", "--output", type=Path, default=Path("processed_data/conversation_sequence.csv"),
+                        help="排序后的对话 CSV 路径（覆盖写入）")
+    args = parser.parse_args()
+
+    final_groups = pd.read_csv(args.evolutions)
     sequences_input = [list[Any](ast.literal_eval(kept_ids_str)) for kept_ids_str in final_groups['sorted_source_ids']]
-    all_facts_df = pd.read_csv('processed_data/original_records_with_facts.csv')
+    all_facts_df = pd.read_csv(args.facts)
     random.shuffle(sequences_input) 
     print(f"开始处理 {len(sequences_input)} 条总序列...")
     result_final, dropped = find_interleaved_sequence(sequences_input)
@@ -105,4 +116,9 @@ if __name__ == "__main__":
                  left_on='id', right_on='record_id', how='left')
           .drop(columns=['record_id'])
     )
-    merged_df.to_csv('processed_data/conversation_sequence.csv', index=False)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    merged_df.to_csv(args.output, index=False)
+
+
+if __name__ == "__main__":
+    main()
