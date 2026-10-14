@@ -25,8 +25,6 @@ GLINER_AVAILABLE = True
 SEMANTIC_MODEL = None  # 延迟加载
 SEMANTIC_AVAILABLE = True
 
-# os.environ["OPENAI_API_KEY"] = "sk-fLtrd6nJYPnyfnzRCf7aD4DdE7C04aCbA85bCb4cC2C1329a"
-# os.environ["OPENAI_BASE_URL"] = "https://api.apiyi.com/v1"
 os.environ["OPENAI_BASE_URL"] = "https://api.siliconflow.cn/v1"
 os.environ["OPENAI_API_KEY"] = "sk-omutivisxktqoglinfimxbckcxacgaqayusvamjquihiujov"
 
